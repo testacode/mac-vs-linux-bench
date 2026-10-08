@@ -24,8 +24,15 @@ y no es APFS en particular: es algo del kernel de macOS que no escala con hilos.
    Terminal.app solo mejora el install ~7%.
 4. **El SSD y el cifrado no son.** RAM disk sin cifrar ≈ SSD con FileVault; lectura
    random 4k escala 13×.
-5. **Los sockets locales tampoco escalan** (ping-pong unix 1,5× contra 16× en Linux): un
-   segundo cuello aparte, probablemente cómo se despiertan los hilos.
+5. **TCP por loopback tiene techo en un único hilo del kernel.** El ping-pong TCP se
+   estanca en ~220k mensajes/s desde 4 pares, con solo ~2 cores ocupados. `spindump`
+   muestra un hilo de kernel (prioridad 81, en `proto_input`) que procesa la entrada de
+   todos los pares y está ocupado casi todo el tiempo de la fase TCP.
+6. **Los unix sockets no muestran un cuello propio de macOS.** Rinden más que en la VM
+   con 1–4 pares (195k contra 54k por par) y se degradan con más pares por costo de
+   despertar hilos (24% de las muestras esperan CPU), sin contención de locks. La
+   comparación contra la VM no es limpia: en la VM, despertar una vCPU dormida es caro
+   y el rendimiento por par no es monótono (54k → 15k → 54k con 1, 8 y 16 pares).
 
 Workload de NullVoxPopuli: install 49,8 s en macOS contra 17,9 s en la VM; 4 installs
 en paralelo, 296 s contra 35 s.
@@ -54,7 +61,7 @@ Para la comparación con Linux: Docker Desktop abierto.
 ./run.sh                    # macOS nativo → results/<host>-darwin/
 ./run-linux.sh              # misma batería en la VM Linux de Docker → results/<host>-linuxvm/
 ./compare.py results/*      # tabla comparativa
-sudo ./profile.sh           # opcional: stacks de kernel con spindump durante la fase fs
+sudo ./profile.sh <label> sock  # opcional: stacks de kernel con spindump (grupo: fs por default)
 ./test.sh                   # smoke test del propio benchmark
 ```
 
